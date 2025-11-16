@@ -59,8 +59,15 @@ const io = new Server(server, {
 });
 
     mongoose.connect(dbURI)
-    .then(() => console.log('MongoDB connected...')) // Or use .then/.catch for promises
-    .catch(err => console.error(err));
+    .then(() => {
+        console.log('MongoDB connected successfully');
+        console.log('Database URI (masked):', dbURI.replace(/\/\/[^@]+@/, '//***:***@'));
+        console.log('Connected to database:', mongoose.connection.name || 'default');
+    })
+    .catch(err => {
+        console.error('MongoDB connection failed:', err);
+        console.error('Database URI (masked):', dbURI.replace(/\/\/[^@]+@/, '//***:***@'));
+    });
 
 //listener for new client connections
 io.on("connection", (socket) => {

@@ -158,5 +158,46 @@ router.get('/health', (req, res) => {
   });
 });
 
+// Database connection test endpoint
+router.get('/test-db', async (req, res) => {
+  try {
+    console.log('Testing database connection...');
+    const mongoose = require('mongoose');
+    
+    // Check if mongoose is connected
+    const isConnected = mongoose.connection.readyState === 1;
+    console.log('Mongoose connection state:', mongoose.connection.readyState);
+    console.log('Database name:', mongoose.connection.name || 'default');
+    
+    if (isConnected) {
+      // Try a simple database operation
+      const testDoc = await Conversation.findOne().limit(1);
+      console.log('Sample document found:', !!testDoc);
+      
+      res.status(200).json({ 
+        status: 'database_connected',
+        connected: true,
+        database: mongoose.connection.name || 'default',
+        documentsExist: !!testDoc,
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      res.status(500).json({ 
+        status: 'database_disconnected',
+        connected: false,
+        connectionState: mongoose.connection.readyState,
+        timestamp: new Date().toISOString()
+      });
+    }
+  } catch (err) {
+    console.error('Database test error:', err);
+    res.status(500).json({ 
+      status: 'database_error',
+      error: err.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // export the router for CommonJS
 module.exports = router;
