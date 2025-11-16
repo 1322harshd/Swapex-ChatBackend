@@ -8,8 +8,14 @@ const Conversation = require("./models");
 function normalizeVal(v) {
   if (v === undefined || v === null) return null;
   if (typeof v === "object") return v._id ?? v.id ?? v;
+  
+  // Try to convert string numbers to actual numbers
   if (typeof v === "string" && /^[0-9]+$/.test(v)) return Number(v);
+  
+  // Check if it's a valid MongoDB ObjectId
   if (typeof v === "string" && mongoose.Types.ObjectId.isValid(v)) return mongoose.Types.ObjectId(v);
+  
+  // Return as-is for any other type (including non-numeric strings)
   return v;
 }
 

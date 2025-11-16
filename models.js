@@ -11,9 +11,9 @@ const messageSchema = new Schema({
 });
 
 const conversationSchema = new Schema({
-  product: Number,      // product ID
-  buyer: Number,        // buyer ID
-  seller: Number,       // seller ID
+  product: { type: Schema.Types.Mixed },  // flexible type for product ID
+  buyer: { type: Schema.Types.Mixed },    // flexible type for buyer ID  
+  seller: { type: Schema.Types.Mixed },   // flexible type for seller ID
   messages: [messageSchema] // array of messages
 });
 
