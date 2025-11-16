@@ -48,9 +48,9 @@ app.use("/", routes);
 const server = http.createServer(app);
 //instantiating the server for socket.io with cors
 const io = new Server(server, {
-  cors: { 
-    origin: allowedOrigins, 
-    methods: ["GET","POST"],
+  cors: {
+    origin: "*", // Allow all origins for EB deployment - restrict to frontend domain later
+    methods: ["GET", "POST"],
     credentials: true 
   }
 });
