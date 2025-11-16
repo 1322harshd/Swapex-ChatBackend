@@ -7,12 +7,20 @@ const mongoose = require('mongoose');
 const Conversation = require("./models");
 // const routes = require('./routes');// <-- remove this unused require
 const app = express();
-app.use(cors({ origin: ["http://localhost:5173"], methods: ["GET","POST"] }));
+app.use(cors({ 
+  origin: ["http://localhost:5174", "http://localhost:5175", "http://127.0.0.1:5174", "http://127.0.0.1:5175"], 
+  methods: ["GET","POST"],
+  credentials: true 
+}));
 //created http server for socket.io
 const server = http.createServer(app);
 //instantiating the server for socket.io with cors
 const io = new Server(server, {
-  cors: { origin: ["http://localhost:5173"], methods: ["GET","POST"] }
+  cors: { 
+    origin: ["http://localhost:5174", "http://localhost:5175", "http://127.0.0.1:5174", "http://127.0.0.1:5175"], 
+    methods: ["GET","POST"],
+    credentials: true 
+  }
 });
 app.use(express.json());
 
@@ -23,10 +31,7 @@ app.use("/", routes);
 
 const dbURI = 'mongodb+srv://harshdeep2k193840_db_user:mhU1sC9dH0zak80m@chatapp.qgehhs3.mongodb.net/?retryWrites=true&w=majority&appName=ChatAPP'; // Replace with your connection string
 
-    mongoose.connect(dbURI, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true
-    })
+    mongoose.connect(dbURI)
     .then(() => console.log('MongoDB connected...')) // Or use .then/.catch for promises
     .catch(err => console.error(err));
 

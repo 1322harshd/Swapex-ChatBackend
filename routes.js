@@ -1,51 +1,98 @@
 // routes/conversation.js
 const express = require("express");
 const router = express.Router();
+const mongoose = require("mongoose");
 const Conversation = require("./models");
 
-// Get or create conversation
+// helper to normalize inputs (try Number, ObjectId, fallback to raw)
+function normalizeVal(v) {
+  if (v === undefined || v === null) return null;
+  if (typeof v === "object") return v._id ?? v.id ?? v;
+  if (typeof v === "string" && /^[0-9]+$/.test(v)) return Number(v);
+  if (typeof v === "string" && mongoose.Types.ObjectId.isValid(v)) return mongoose.Types.ObjectId(v);
+  return v;
+}
+
+// Get or create conversation (atomic upsert)
 router.post("/conversation", async (req, res) => {
-  const { product, buyer, seller } = req.body;
-
   try {
-    // check if conversation exists
-    let convo = await Conversation.findOne({ product, buyer, seller });
-    console.log({product,buyer,seller});
-    if (!convo) {
-      // create new one
-      convo = new Conversation({ product, buyer, seller, messages: [] });
-      await convo.save();
-    }
+    console.log("🔵 POST /conversation REQUEST RECEIVED");
+    console.log("Raw body:", req.body);
+    
+    const { product: rawProduct, buyer: rawBuyer, seller: rawSeller } = req.body;
+    const product = normalizeVal(rawProduct);
+    const buyer = normalizeVal(rawBuyer);
+    const seller = normalizeVal(rawSeller);
 
-    res.json(convo); // return conversation (with messages if exists)
+    console.log("Normalized values:", { product, buyer, seller });
+
+    const query = {};
+    if (product !== null) query.product = product;
+    if (buyer !== null) query.buyer = buyer;
+    if (seller !== null) query.seller = seller;
+
+    console.log("MongoDB query:", query);
+
+    // Check if conversation already exists before upsert
+    const existing = await Conversation.findOne(query);
+    console.log("Existing conversation found:", existing ? existing._id : "NONE");
+
+    // atomic upsert -> returns existing or creates one without race-duplication
+    const convo = await Conversation.findOneAndUpdate(
+      query,
+      { $setOnInsert: { product, buyer, seller, messages: [] } },
+      { new: true, upsert: true }
+    ).lean();
+
+    console.log("🟢 POST /conversation RESULT ->", { 
+      product, buyer, seller, 
+      id: convo?._id,
+      wasNew: !existing,
+      timestamp: new Date().toISOString()
+    });
+    return res.json(convo);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
+    console.error("🔴 POST /conversation error:", err);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
-
-// Add message
+// Add message (atomic push)
 router.post("/conversation/:id/message", async (req, res) => {
-  const { id } = req.params;
-  const { sender, text } = req.body;
-
-  // Debug: log what is received
-  console.log("POST /conversation/:id/message");
-  console.log("Conversation ID:", id);
-  console.log("Sender:", sender);
-  console.log("Text:", text);
-
   try {
-    const convo = await Conversation.findById(id);
+    const { id } = req.params;
+    const { sender: rawSender, text } = req.body;
+    const sender = normalizeVal(rawSender);
+
+    const convo = await Conversation.findByIdAndUpdate(
+      id,
+      { $push: { messages: { sender, text } } },
+      { new: true }
+    );
+
     if (!convo) return res.status(404).json({ error: "Conversation not found" });
-
-    convo.messages.push({ sender, text });
-    await convo.save();
-
-    res.json(convo);
+    return res.json(convo);
   } catch (err) {
-    console.error(err);
+    console.error("POST message error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+// List conversations (filter by seller, buyer or product via query params)
+router.get("/conversation", async (req, res) => {
+  try {
+    const { seller, buyer, product } = req.query;
+    const query = {};
+    if (seller) query.seller = parseInt(seller);
+    if (buyer) query.buyer = parseInt(buyer);
+    if (product) query.product = parseInt(product);
+
+    // optional: populate product/buyer fields if you store refs and want more info
+    const convos = await Conversation.find(query).lean();
+    console.log("GET /conversation", { query, count: convos.length });
+    res.json(convos);
+  } catch (err) {
+    console.error("Failed to list conversations", err);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -57,6 +104,42 @@ router.get("/conversation/:id", async (req, res) => {
     const convo = await Conversation.findById(req.params.id);
     if (!convo) return res.status(404).json({ error: "Conversation not found" });
     res.json(convo);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// API Routes for products
+router.get("/api/products/:id", async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    // For now, return a mock product or find conversations related to this product
+    const conversations = await Conversation.find({ product: parseInt(id) });
+    
+    // Mock product data - you can replace this with actual product data from a Product model
+    const product = {
+      id: parseInt(id),
+      name: `Product ${id}`,
+      description: "Sample product description",
+      conversations: conversations
+    };
+    
+    res.json(product);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Get conversations for a specific product
+router.get("/api/products/:id/conversations", async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    const conversations = await Conversation.find({ product: parseInt(id) });
+    res.json(conversations);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
