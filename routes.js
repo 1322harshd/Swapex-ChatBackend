@@ -205,5 +205,23 @@ router.get('/test-db', async (req, res) => {
   }
 });
 
+// Test route that doesn't use MongoDB
+router.get('/test', (req, res) => {
+  res.json({ 
+    message: 'Test route working!', 
+    timestamp: new Date().toISOString(),
+    env: process.env.NODE_ENV 
+  });
+});
+
+// Test POST route that doesn't use MongoDB
+router.post('/test', (req, res) => {
+  res.json({ 
+    message: 'POST test route working!', 
+    body: req.body,
+    timestamp: new Date().toISOString() 
+  });
+});
+
 // export the router for CommonJS
 module.exports = router;
