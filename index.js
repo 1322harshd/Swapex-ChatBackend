@@ -39,6 +39,9 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Serve static files (replaces EB static files configuration)
+app.use(express.static("public"));
+
 // require once and verify it's a router/middleware
 const routes = require("./routes.js");
 console.log('routes type:', typeof routes, 'isRouter:', routes && typeof routes.use === 'function'); // debug
