@@ -2,11 +2,11 @@ const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
 const messageSchema = new Schema({
-  sender: Number,     // buyer or seller ID
-  text: String,       // message content
+  sender: Schema.Types.Mixed,  // flexible type for sender ID
+  text: String,                // message content
   createdAt: {
     type: Date,
-    default: Date.now // auto timestamp
+    default: Date.now          // auto timestamp
   }
 });
 
