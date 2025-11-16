@@ -149,5 +149,14 @@ router.get("/api/products/:id/conversations", async (req, res) => {
 // example route
 router.get('/', (req, res) => res.send('OK'));
 
+// Health check endpoint for AWS ELB
+router.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    service: 'swapex-chat-backend'
+  });
+});
+
 // export the router for CommonJS
 module.exports = router;
