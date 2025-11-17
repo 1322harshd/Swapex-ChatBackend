@@ -5,7 +5,6 @@ const http = require('http');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const Conversation = require("./models");
-// const routes = require('./routes');// <-- remove this unused require
 const app = express();
 const PORT = process.env.PORT || 3000;
 const dbURI = process.env.MONGODB_URI;
@@ -21,7 +20,6 @@ const allowedOrigins = [
   "http://localhost:5175", 
   "http://127.0.0.1:5174", 
   "http://127.0.0.1:5175",
-  // Vercel deployment URLs
   "https://swapex-verceldeployment.vercel.app",
   "https://swapex-verceldepl-git-71c775-harshdeep-singhs-projects-bd6643fa.vercel.app",
   "https://swapex-verceldeployment-1nxouthl8.vercel.app"
@@ -32,11 +30,26 @@ if (process.env.FRONTEND_URL) {
   allowedOrigins.push(process.env.FRONTEND_URL);
 }
 
+// Enhanced CORS configuration
 app.use(cors({ 
-  origin: allowedOrigins, 
-  methods: ["GET","POST"],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.includes('vercel.app')) {
+      return callback(null, true);
+    }
+    
+    return callback(new Error('Not allowed by CORS'));
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true 
 }));
+
+// Handle preflight requests
+app.options('*', cors());
+
 app.use(express.json());
 
 // Serve static files (replaces EB static files configuration)
@@ -44,7 +57,7 @@ app.use(express.static("public"));
 
 // require once and verify it's a router/middleware
 const routes = require("./routes.js");
-console.log('routes type:', typeof routes, 'isRouter:', routes && typeof routes.use === 'function'); // debug
+console.log('routes type:', typeof routes, 'isRouter:', routes && typeof routes.use === 'function');
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -79,13 +92,25 @@ app.use("/", routes);
 
 //created http server for socket.io
 const server = http.createServer(app);
-//instantiating the server for socket.io with cors
+
+//instantiating the server for socket.io with enhanced CORS
 const io = new Server(server, {
   cors: {
-    origin: "*", // Allow all origins for EB deployment - restrict to frontend domain later
+    origin: function (origin, callback) {
+      // Allow requests with no origin
+      if (!origin) return callback(null, true);
+      
+      if (allowedOrigins.indexOf(origin) !== -1 || origin.includes('vercel.app')) {
+        return callback(null, true);
+      }
+      
+      return callback(null, true); // Allow all for now to test
+    },
     methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true 
-  }
+  },
+  allowEIO3: true // Allow Engine.IO v3 clients
 });
 
 // Enhanced MongoDB connection with better error handling
@@ -146,23 +171,23 @@ io.on("connection", (socket) => {
       // Save message to MongoDB
       const conversation = await Conversation.findById(conversationId);
       if (conversation) {
-        conversation.messages.push({
+        const newMessage = {
           sender: message.sender,
           text: message.text,
           timestamp: message.timestamp || new Date()
-        });
+        };
+        
+        conversation.messages.push(newMessage);
         await conversation.save();
         console.log("Message saved to database");
+        
+        // Broadcast the message to all users in the room
+        io.to(conversationId).emit('receive_message', newMessage);
+        console.log(`Message broadcasted to room ${conversationId}`);
+      } else {
+        console.error(`Conversation ${conversationId} not found`);
+        socket.emit('message_error', { error: 'Conversation not found' });
       }
-
-      // Broadcast the message to all users in the room
-      io.to(conversationId).emit('receive_message', {
-        sender: message.sender,
-        text: message.text,
-        timestamp: message.timestamp || new Date()
-      });
-      
-      console.log(`Message broadcasted to room ${conversationId}`);
     } catch (error) {
       console.error('Error handling send_message:', error);
       socket.emit('message_error', { error: 'Failed to send message' });
@@ -182,4 +207,8 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(PORT, () => console.log(`Socket.IO server running on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`Socket.IO server running on port ${PORT}`);
+  console.log(`Health check available at: http://localhost:${PORT}/health`);
+  console.log('CORS origins:', allowedOrigins);
+});
