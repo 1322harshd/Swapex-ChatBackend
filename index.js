@@ -30,25 +30,22 @@ if (process.env.FRONTEND_URL) {
   allowedOrigins.push(process.env.FRONTEND_URL);
 }
 
-// Enhanced CORS configuration
+// Completely open CORS for testing
 app.use(cors({ 
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1 || origin.includes('vercel.app')) {
-      return callback(null, true);
-    }
-    
-    return callback(new Error('Not allowed by CORS'));
-  },
+  origin: true, // Allow all origins
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["*"],
   credentials: true 
 }));
 
-// Handle preflight requests
-app.options('*', cors());
+// Add explicit preflight handler
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.status(200).send();
+});
 
 app.use(express.json());
 
@@ -93,24 +90,14 @@ app.use("/", routes);
 //created http server for socket.io
 const server = http.createServer(app);
 
-//instantiating the server for socket.io with enhanced CORS
+// Socket.io with open CORS
 const io = new Server(server, {
   cors: {
-    origin: function (origin, callback) {
-      // Allow requests with no origin
-      if (!origin) return callback(null, true);
-      
-      if (allowedOrigins.indexOf(origin) !== -1 || origin.includes('vercel.app')) {
-        return callback(null, true);
-      }
-      
-      return callback(null, true); // Allow all for now to test
-    },
+    origin: "*", // Allow all origins for testing
     methods: ["GET", "POST"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["*"],
     credentials: true 
-  },
-  allowEIO3: true // Allow Engine.IO v3 clients
+  }
 });
 
 // Enhanced MongoDB connection with better error handling
