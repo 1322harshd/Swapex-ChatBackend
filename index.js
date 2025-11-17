@@ -88,34 +88,31 @@ const io = new Server(server, {
   }
 });
 
-    // Enhanced MongoDB connection with better error handling
-    mongoose.connect(dbURI, {
-        serverSelectionTimeoutMS: 10000, // 10 second timeout
-        socketTimeoutMS: 45000, // 45 second socket timeout
-        maxPoolSize: 10, // Maintain up to 10 socket connections
-        serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
-        heartbeatFrequencyMS: 10000, // Send a ping every 10 seconds
-        bufferCommands: false, // Disable mongoose buffering
-        bufferMaxEntries: 0 // Disable mongoose buffering
-    })
-    .then(() => {
-        console.log('MongoDB connected successfully');
-        console.log('Database URI (masked):', dbURI.replace(/\/\/[^@]+@/, '//***:***@'));
-        console.log('Connected to database:', mongoose.connection.name || 'default');
-        console.log('MongoDB connection state:', mongoose.connection.readyState);
-    })
-    .catch(err => {
-        console.error('MongoDB connection failed:', err.message);
-        console.error('Error code:', err.code);
-        console.error('Error name:', err.name);
-        console.error('Database URI (masked):', dbURI.replace(/\/\/[^@]+@/, '//***:***@'));
-        console.error('Full error:', err);
-        
-        // Exit process on connection failure for hosted environments
-        if (process.env.NODE_ENV === 'production') {
-            process.exit(1);
-        }
-    });
+// Enhanced MongoDB connection with better error handling
+mongoose.connect(dbURI, {
+    serverSelectionTimeoutMS: 10000, 
+    socketTimeoutMS: 45000, 
+    maxPoolSize: 10, 
+    heartbeatFrequencyMS: 10000,
+})
+.then(() => {
+    console.log('MongoDB connected successfully');
+    console.log('Database URI (masked):', dbURI.replace(/\/\/[^@]+@/, '//***:***@'));
+    console.log('Connected to database:', mongoose.connection.name || 'default');
+    console.log('MongoDB connection state:', mongoose.connection.readyState);
+})
+.catch(err => {
+    console.error('MongoDB connection failed:', err.message);
+    console.error('Error code:', err.code);
+    console.error('Error name:', err.name);
+    console.error('Database URI (masked):', dbURI.replace(/\/\/[^@]+@/, '//***:***@'));
+    console.error('Full error:', err);
+    
+    // Exit process on connection failure for hosted environments
+    if (process.env.NODE_ENV === 'production') {
+        process.exit(1);
+    }
+});
 
 // Handle MongoDB connection events
 mongoose.connection.on('error', (err) => {
