@@ -131,14 +131,52 @@ mongoose.connection.on('reconnected', () => {
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
-  // Listen to messages from clients
-  socket.on("sendMessage", (data) => {
-    console.log("Received:", data);
+  // Join a conversation room
+  socket.on('join_room', (conversationId) => {
+    socket.join(conversationId);
+    console.log(`User ${socket.id} joined room ${conversationId}`);
+  });
 
+  // Handle sending messages
+  socket.on('send_message', async (data) => {
+    try {
+      const { conversationId, message } = data;
+      console.log("Received message for room:", conversationId, message);
+
+      // Save message to MongoDB
+      const conversation = await Conversation.findById(conversationId);
+      if (conversation) {
+        conversation.messages.push({
+          sender: message.sender,
+          text: message.text,
+          timestamp: message.timestamp || new Date()
+        });
+        await conversation.save();
+        console.log("Message saved to database");
+      }
+
+      // Broadcast the message to all users in the room
+      io.to(conversationId).emit('receive_message', {
+        sender: message.sender,
+        text: message.text,
+        timestamp: message.timestamp || new Date()
+      });
+      
+      console.log(`Message broadcasted to room ${conversationId}`);
+    } catch (error) {
+      console.error('Error handling send_message:', error);
+      socket.emit('message_error', { error: 'Failed to send message' });
+    }
+  });
+
+  // Keep your existing listeners (backward compatibility)
+  socket.on("sendMessage", (data) => {
+    console.log("Received (legacy):", data);
     // Broadcast to all clients including sender
     io.emit("newMessage", data);
   });
-//listen to disconnection
+
+  //listen to disconnection
   socket.on("disconnect", () => {
     console.log("User disconnected:", socket.id);
   });
