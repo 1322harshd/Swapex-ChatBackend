@@ -45,6 +45,36 @@ app.use(express.static("public"));
 // require once and verify it's a router/middleware
 const routes = require("./routes.js");
 console.log('routes type:', typeof routes, 'isRouter:', routes && typeof routes.use === 'function'); // debug
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  const healthCheck = {
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    mongodb: {
+      state: mongoose.connection.readyState,
+      host: mongoose.connection.host,
+      port: mongoose.connection.port,
+      name: mongoose.connection.name
+    },
+    environment: {
+      nodeEnv: process.env.NODE_ENV,
+      port: PORT,
+      hasMongoUri: !!process.env.MONGODB_URI
+    }
+  };
+  
+  // Check if MongoDB is connected
+  if (mongoose.connection.readyState !== 1) {
+    healthCheck.status = 'ERROR';
+    healthCheck.mongodb.error = 'Not connected to MongoDB';
+    return res.status(503).json(healthCheck);
+  }
+  
+  res.json(healthCheck);
+});
+
 app.use("/", routes);
 
 //created http server for socket.io
@@ -58,16 +88,47 @@ const io = new Server(server, {
   }
 });
 
-    mongoose.connect(dbURI)
+    // Enhanced MongoDB connection with better error handling
+    mongoose.connect(dbURI, {
+        serverSelectionTimeoutMS: 10000, // 10 second timeout
+        socketTimeoutMS: 45000, // 45 second socket timeout
+        maxPoolSize: 10, // Maintain up to 10 socket connections
+        serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
+        heartbeatFrequencyMS: 10000, // Send a ping every 10 seconds
+        bufferCommands: false, // Disable mongoose buffering
+        bufferMaxEntries: 0 // Disable mongoose buffering
+    })
     .then(() => {
         console.log('MongoDB connected successfully');
         console.log('Database URI (masked):', dbURI.replace(/\/\/[^@]+@/, '//***:***@'));
         console.log('Connected to database:', mongoose.connection.name || 'default');
+        console.log('MongoDB connection state:', mongoose.connection.readyState);
     })
     .catch(err => {
-        console.error('MongoDB connection failed:', err);
+        console.error('MongoDB connection failed:', err.message);
+        console.error('Error code:', err.code);
+        console.error('Error name:', err.name);
         console.error('Database URI (masked):', dbURI.replace(/\/\/[^@]+@/, '//***:***@'));
+        console.error('Full error:', err);
+        
+        // Exit process on connection failure for hosted environments
+        if (process.env.NODE_ENV === 'production') {
+            process.exit(1);
+        }
     });
+
+// Handle MongoDB connection events
+mongoose.connection.on('error', (err) => {
+    console.error('MongoDB connection error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+    console.warn('MongoDB disconnected');
+});
+
+mongoose.connection.on('reconnected', () => {
+    console.log('MongoDB reconnected');
+});
 
 //listener for new client connections
 io.on("connection", (socket) => {

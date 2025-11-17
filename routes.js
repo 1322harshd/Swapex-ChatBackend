@@ -58,8 +58,25 @@ router.post("/conversation", async (req, res) => {
     });
     return res.json(convo);
   } catch (err) {
-    console.error("🔴 POST /conversation error:", err);
-    return res.status(500).json({ error: "Server error" });
+    console.error("🔴 POST /conversation error:", err.message);
+    console.error("Error name:", err.name);
+    console.error("Error stack:", err.stack);
+    
+    // Check for specific MongoDB errors
+    if (err.name === 'MongoNetworkError' || err.name === 'MongoServerSelectionError') {
+      console.error("MongoDB connection issue detected");
+      return res.status(503).json({ error: "Database connection failed" });
+    }
+    
+    if (err.name === 'ValidationError') {
+      console.error("Validation error:", err.errors);
+      return res.status(400).json({ error: "Invalid data", details: err.errors });
+    }
+    
+    return res.status(500).json({ 
+      error: "Server error", 
+      message: process.env.NODE_ENV === 'development' ? err.message : undefined 
+    });
   }
 });
 
@@ -79,8 +96,21 @@ router.post("/conversation/:id/message", async (req, res) => {
     if (!convo) return res.status(404).json({ error: "Conversation not found" });
     return res.json(convo);
   } catch (err) {
-    console.error("POST message error:", err);
-    return res.status(500).json({ error: "Server error" });
+    console.error("POST message error:", err.message);
+    console.error("Error name:", err.name);
+    
+    if (err.name === 'CastError') {
+      return res.status(400).json({ error: "Invalid conversation ID" });
+    }
+    
+    if (err.name === 'MongoNetworkError' || err.name === 'MongoServerSelectionError') {
+      return res.status(503).json({ error: "Database connection failed" });
+    }
+    
+    return res.status(500).json({ 
+      error: "Server error", 
+      message: process.env.NODE_ENV === 'development' ? err.message : undefined 
+    });
   }
 });
 
