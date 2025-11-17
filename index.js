@@ -6,7 +6,7 @@ const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const Conversation = require("./models");
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8081; // EB expects 8081, not 3000
 const dbURI = process.env.MONGODB_URI;
 
 if (!dbURI) {
