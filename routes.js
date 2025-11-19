@@ -1,75 +1,67 @@
-// routes/conversation.js
+/**
+ * Conversation Routes
+ * Handles API endpoints for conversation management including creation, messaging, and retrieval
+ */
+
 const express = require("express");
 const router = express.Router();
 const mongoose = require("mongoose");
 const Conversation = require("./models");
 
-// helper to normalize inputs (try Number, ObjectId, fallback to raw)
+/**
+ * Helper function to normalize input values for database queries
+ * Converts string numbers to integers and validates MongoDB ObjectIds
+ */
 function normalizeVal(v) {
   if (v === undefined || v === null) return null;
   if (typeof v === "object") return v._id ?? v.id ?? v;
   
-  // Try to convert string numbers to actual numbers
+  // Convert string numbers to actual numbers
   if (typeof v === "string" && /^[0-9]+$/.test(v)) return Number(v);
   
-  // Check if it's a valid MongoDB ObjectId
+  // Validate and convert MongoDB ObjectIds
   if (typeof v === "string" && mongoose.Types.ObjectId.isValid(v)) return mongoose.Types.ObjectId(v);
   
-  // Return as-is for any other type (including non-numeric strings)
   return v;
 }
 
-// Get or create conversation (atomic upsert)
+/**
+ * POST / - Get or create conversation using atomic upsert
+ * Prevents duplicate conversations for the same product/buyer/seller combination
+ */
 router.post("/", async (req, res) => {
   try {
-    console.log("🔵 POST / REQUEST RECEIVED");
-    console.log("Raw body:", req.body);
-    
     const { product: rawProduct, buyer: rawBuyer, seller: rawSeller } = req.body;
+    
+    // Normalize input values for consistent database storage
     const product = normalizeVal(rawProduct);
     const buyer = normalizeVal(rawBuyer);
     const seller = normalizeVal(rawSeller);
 
-    console.log("Normalized values:", { product, buyer, seller });
-
+    // Build query object excluding null values
     const query = {};
     if (product !== null) query.product = product;
     if (buyer !== null) query.buyer = buyer;
     if (seller !== null) query.seller = seller;
 
-    console.log("MongoDB query:", query);
-
-    // Check if conversation already exists before upsert
-    const existing = await Conversation.findOne(query);
-    console.log("Existing conversation found:", existing ? existing._id : "NONE");
-
-    // atomic upsert -> returns existing or creates one without race-duplication
+    // Use atomic upsert to prevent race conditions and duplicate conversations
     const convo = await Conversation.findOneAndUpdate(
       query,
       { $setOnInsert: { product, buyer, seller, messages: [] } },
       { new: true, upsert: true }
     ).lean();
 
-    console.log("🟢 POST / RESULT ->", { 
-      product, buyer, seller, 
-      id: convo?._id,
-      wasNew: !existing,
-      timestamp: new Date().toISOString()
-    });
     return res.json(convo);
   } catch (err) {
-    console.error("🔴 POST / error:", err.message);
-    console.error("Error name:", err.name);
-    console.error("Error stack:", err.stack);
+    console.error("Error creating/finding conversation:", err.message);
     
-    // Check for specific MongoDB errors
+    // Handle specific MongoDB connection errors
     if (err.name === 'MongoNetworkError' || err.name === 'MongoServerSelectionError') {
-      console.error("MongoDB connection issue detected");
       return res.status(503).json({ error: "Database connection failed" });
     }
     
+    // Handle validation errors
     if (err.name === 'ValidationError') {
-      console.error("Validation error:", err.errors);
       return res.status(400).json({ error: "Invalid data", details: err.errors });
     }
     
@@ -80,13 +72,17 @@ router.post("/", async (req, res) => {
   }
 });
 
-// Add message (atomic push)
+/**
+ * POST /:id/message - Add a new message to an existing conversation
+ * Uses atomic push operation to ensure message consistency
+ */
 router.post("/:id/message", async (req, res) => {
   try {
     const { id } = req.params;
     const { sender: rawSender, text } = req.body;
     const sender = normalizeVal(rawSender);
 
+    // Atomically add message to conversation
     const convo = await Conversation.findByIdAndUpdate(
       id,
       { $push: { messages: { sender, text } } },
@@ -96,13 +92,14 @@ router.post("/:id/message", async (req, res) => {
     if (!convo) return res.status(404).json({ error: "Conversation not found" });
     return res.json(convo);
   } catch (err) {
-    console.error("POST message error:", err.message);
-    console.error("Error name:", err.name);
+    console.error("Error adding message:", err.message);
     
+    // Handle invalid conversation ID format
     if (err.name === 'CastError') {
       return res.status(400).json({ error: "Invalid conversation ID" });
     }
     
+    // Handle database connection issues
     if (err.name === 'MongoNetworkError' || err.name === 'MongoServerSelectionError') {
       return res.status(503).json({ error: "Database connection failed" });
     }
@@ -114,47 +111,55 @@ router.post("/:id/message", async (req, res) => {
   }
 });
 
-// List conversations (filter by seller, buyer or product via query params)
+/**
+ * GET / - List conversations with optional filtering
+ * Supports filtering by seller, buyer, or product via query parameters
+ */
 router.get("/", async (req, res) => {
   try {
     const { seller, buyer, product } = req.query;
+    
+    // Build filter query from query parameters
     const query = {};
     if (seller) query.seller = parseInt(seller);
     if (buyer) query.buyer = parseInt(buyer);
     if (product) query.product = parseInt(product);
 
-    // optional: populate product/buyer fields if you store refs and want more info
     const convos = await Conversation.find(query).lean();
-    console.log("GET /", { query, count: convos.length });
     res.json(convos);
   } catch (err) {
-    console.error("Failed to list conversations", err);
+    console.error("Error listing conversations:", err.message);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-//load previous conversations
+/**
+ * GET /:id - Load a specific conversation by ID
+ * Returns conversation with all messages
+ */
 router.get("/:id", async (req, res) => {
-  console.log("GET /:id", req.params.id);
   try {
     const convo = await Conversation.findById(req.params.id);
     if (!convo) return res.status(404).json({ error: "Conversation not found" });
     res.json(convo);
   } catch (err) {
-    console.error(err);
+    console.error("Error loading conversation:", err.message);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-// API Routes for products
+/**
+ * GET /api/products/:id - Get product information with related conversations
+ * Returns mock product data - can be replaced with actual product service integration
+ */
 router.get("/api/products/:id", async (req, res) => {
   const { id } = req.params;
   
   try {
-    // For now, return a mock product or find conversations related to this product
+    // Find conversations related to this product
     const conversations = await Conversation.find({ product: parseInt(id) });
     
-    // Mock product data - you can replace this with actual product data from a Product model
+    // Return mock product data with conversations
     const product = {
       id: parseInt(id),
       name: `Product ${id}`,
@@ -164,12 +169,14 @@ router.get("/api/products/:id", async (req, res) => {
     
     res.json(product);
   } catch (err) {
-    console.error(err);
+    console.error("Error loading product:", err.message);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-// Get conversations for a specific product
+/**
+ * GET /api/products/:id/conversations - Get all conversations for a specific product
+ */
 router.get("/api/products/:id/conversations", async (req, res) => {
   const { id } = req.params;
   
@@ -177,15 +184,14 @@ router.get("/api/products/:id/conversations", async (req, res) => {
     const conversations = await Conversation.find({ product: parseInt(id) });
     res.json(conversations);
   } catch (err) {
-    console.error(err);
+    console.error("Error loading product conversations:", err.message);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-// example route
-router.get('/', (req, res) => res.send('OK'));
-
-// Health check endpoint for AWS ELB
+/**
+ * Health check endpoint for load balancers and monitoring
+ */
 router.get('/health', (req, res) => {
   res.status(200).json({ 
     status: 'healthy', 
@@ -194,21 +200,19 @@ router.get('/health', (req, res) => {
   });
 });
 
-// Database connection test endpoint
+/**
+ * Database connection test endpoint for debugging
+ */
 router.get('/test-db', async (req, res) => {
   try {
-    console.log('Testing database connection...');
     const mongoose = require('mongoose');
     
-    // Check if mongoose is connected
+    // Check mongoose connection status
     const isConnected = mongoose.connection.readyState === 1;
-    console.log('Mongoose connection state:', mongoose.connection.readyState);
-    console.log('Database name:', mongoose.connection.name || 'default');
     
     if (isConnected) {
-      // Try a simple database operation
+      // Test database operation
       const testDoc = await Conversation.findOne().limit(1);
-      console.log('Sample document found:', !!testDoc);
       
       res.status(200).json({ 
         status: 'database_connected',
@@ -226,7 +230,7 @@ router.get('/test-db', async (req, res) => {
       });
     }
   } catch (err) {
-    console.error('Database test error:', err);
+    console.error('Database test error:', err.message);
     res.status(500).json({ 
       status: 'database_error',
       error: err.message,
@@ -235,7 +239,9 @@ router.get('/test-db', async (req, res) => {
   }
 });
 
-// Test route that doesn't use MongoDB
+/**
+ * Simple test endpoints for API health verification
+ */
 router.get('/test', (req, res) => {
   res.json({ 
     message: 'Test route working!', 
@@ -244,7 +250,6 @@ router.get('/test', (req, res) => {
   });
 });
 
-// Test POST route that doesn't use MongoDB
 router.post('/test', (req, res) => {
   res.json({ 
     message: 'POST test route working!', 
@@ -253,5 +258,4 @@ router.post('/test', (req, res) => {
   });
 });
 
-// export the router for CommonJS
 module.exports = router;
