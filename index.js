@@ -1,106 +1,50 @@
-// server.js
-const express = require('express');
-const cors = require('cors');
-const http = require('http');
-const { Server } = require('socket.io');
-const mongoose = require('mongoose');
+const express = require("express");
+const cors = require("cors");
+const http = require("http");
+const { Server } = require("socket.io");
+const mongoose = require("mongoose");
+const conversationRoutes = require("./routes");
 const Conversation = require("./models");
-const app = express();
-const PORT = process.env.PORT || 8081; // EB expects 8081, not 3000
-const dbURI = process.env.MONGODB_URI;
 
+const app = express();
+
+// MongoDB URI check
+const dbURI = process.env.MONGODB_URI;
 if (!dbURI) {
   console.error('MONGODB_URI environment variable is required');
   process.exit(1);
 }
 
-// Allow more origins for production
-const allowedOrigins = [
-  "http://localhost:5174", 
-  "http://localhost:5175", 
-  "http://127.0.0.1:5174", 
-  "http://127.0.0.1:5175",
-  "https://swapex-verceldeployment.vercel.app",
-  "https://swapex-verceldepl-git-71c775-harshdeep-singhs-projects-bd6643fa.vercel.app",
-  "https://swapex-verceldeployment-1nxouthl8.vercel.app"
-];
-
-// Add production origins if available
-if (process.env.FRONTEND_URL) {
-  allowedOrigins.push(process.env.FRONTEND_URL);
-}
-
-// Completely open CORS for testing
-app.use(cors({ 
-  origin: true, // Allow all origins
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["*"],
-  credentials: true 
+// 1. CORS first
+app.use(cors({
+  origin: [
+    "https://swapex-verceldeployment.vercel.app",
+    "http://localhost:5174"
+  ],
+  credentials: true
 }));
-
-// Add explicit preflight handler
-app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-  res.header('Access-Control-Allow-Headers', '*');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.status(200).send();
-});
 
 app.use(express.json());
 
-// Serve static files (replaces EB static files configuration)
-app.use(express.static("public"));
+// 2. Routes before socket
+app.use("/conversation", conversationRoutes);
 
-// require once and verify it's a router/middleware
-const routes = require("./routes.js");
-console.log('routes type:', typeof routes, 'isRouter:', routes && typeof routes.use === 'function');
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-  const healthCheck = {
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    mongodb: {
-      state: mongoose.connection.readyState,
-      host: mongoose.connection.host,
-      port: mongoose.connection.port,
-      name: mongoose.connection.name
-    },
-    environment: {
-      nodeEnv: process.env.NODE_ENV,
-      port: PORT,
-      hasMongoUri: !!process.env.MONGODB_URI
-    }
-  };
-  
-  // Check if MongoDB is connected
-  if (mongoose.connection.readyState !== 1) {
-    healthCheck.status = 'ERROR';
-    healthCheck.mongodb.error = 'Not connected to MongoDB';
-    return res.status(503).json(healthCheck);
-  }
-  
-  res.json(healthCheck);
-});
-
-app.use("/", routes);
-
-//created http server for socket.io
+// 3. Create HTTP server
 const server = http.createServer(app);
 
-// Socket.io with open CORS
+// 4. Attach socket.io
 const io = new Server(server, {
   cors: {
-    origin: "*", // Allow all origins for testing
+    origin: [
+      "https://swapex-verceldeployment.vercel.app",
+      "http://localhost:5174"
+    ],
     methods: ["GET", "POST"],
-    allowedHeaders: ["*"],
-    credentials: true 
+    credentials: true
   }
 });
 
-// Enhanced MongoDB connection with better error handling
+// MongoDB connection
 mongoose.connect(dbURI, {
     serverSelectionTimeoutMS: 10000, 
     socketTimeoutMS: 45000, 
@@ -139,9 +83,9 @@ mongoose.connection.on('reconnected', () => {
     console.log('MongoDB reconnected');
 });
 
-//listener for new client connections
+// 5. Socket logic
 io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
+  console.log("Client connected", socket.id);
 
   // Join a conversation room
   socket.on('join_room', (conversationId) => {
@@ -194,8 +138,8 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Socket.IO server running on port ${PORT}`);
-  console.log(`Health check available at: http://localhost:${PORT}/health`);
-  console.log('CORS origins:', allowedOrigins);
+// 6. Listen on EB port
+const port = process.env.PORT || 8080;
+server.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });

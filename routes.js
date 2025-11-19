@@ -20,9 +20,9 @@ function normalizeVal(v) {
 }
 
 // Get or create conversation (atomic upsert)
-router.post("/conversation", async (req, res) => {
+router.post("/", async (req, res) => {
   try {
-    console.log("🔵 POST /conversation REQUEST RECEIVED");
+    console.log("🔵 POST / REQUEST RECEIVED");
     console.log("Raw body:", req.body);
     
     const { product: rawProduct, buyer: rawBuyer, seller: rawSeller } = req.body;
@@ -50,7 +50,7 @@ router.post("/conversation", async (req, res) => {
       { new: true, upsert: true }
     ).lean();
 
-    console.log("🟢 POST /conversation RESULT ->", { 
+    console.log("🟢 POST / RESULT ->", { 
       product, buyer, seller, 
       id: convo?._id,
       wasNew: !existing,
@@ -58,7 +58,7 @@ router.post("/conversation", async (req, res) => {
     });
     return res.json(convo);
   } catch (err) {
-    console.error("🔴 POST /conversation error:", err.message);
+    console.error("🔴 POST / error:", err.message);
     console.error("Error name:", err.name);
     console.error("Error stack:", err.stack);
     
@@ -81,7 +81,7 @@ router.post("/conversation", async (req, res) => {
 });
 
 // Add message (atomic push)
-router.post("/conversation/:id/message", async (req, res) => {
+router.post("/:id/message", async (req, res) => {
   try {
     const { id } = req.params;
     const { sender: rawSender, text } = req.body;
@@ -115,7 +115,7 @@ router.post("/conversation/:id/message", async (req, res) => {
 });
 
 // List conversations (filter by seller, buyer or product via query params)
-router.get("/conversation", async (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const { seller, buyer, product } = req.query;
     const query = {};
@@ -125,7 +125,7 @@ router.get("/conversation", async (req, res) => {
 
     // optional: populate product/buyer fields if you store refs and want more info
     const convos = await Conversation.find(query).lean();
-    console.log("GET /conversation", { query, count: convos.length });
+    console.log("GET /", { query, count: convos.length });
     res.json(convos);
   } catch (err) {
     console.error("Failed to list conversations", err);
@@ -134,8 +134,8 @@ router.get("/conversation", async (req, res) => {
 });
 
 //load previous conversations
-router.get("/conversation/:id", async (req, res) => {
-  console.log("GET /conversation/:id", req.params.id);
+router.get("/:id", async (req, res) => {
+  console.log("GET /:id", req.params.id);
   try {
     const convo = await Conversation.findById(req.params.id);
     if (!convo) return res.status(404).json({ error: "Conversation not found" });
