@@ -2,19 +2,19 @@ const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
 const messageSchema = new Schema({
-  sender: Schema.Types.Mixed,  // flexible type for sender ID
-  text: String,                // message content
+  sender: Schema.Types.Mixed,
+  text: String,             
   createdAt: {
     type: Date,
-    default: Date.now          // auto timestamp
+    default: Date.now          
   }
 });
 
 const conversationSchema = new Schema({
-  product: { type: Schema.Types.Mixed },  // flexible type for product ID
-  buyer: { type: Schema.Types.Mixed },    // flexible type for buyer ID  
-  seller: { type: Schema.Types.Mixed },   // flexible type for seller ID
-  messages: [messageSchema] // array of messages
+  product: { type: Schema.Types.Mixed },  
+  buyer: { type: Schema.Types.Mixed },    
+  seller: { type: Schema.Types.Mixed },   
+  messages: [messageSchema] 
 });
 
 const Conversation = mongoose.model("Conversation", conversationSchema);

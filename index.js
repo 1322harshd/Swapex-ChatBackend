@@ -1,3 +1,8 @@
+/**
+ * Swapex Chat Backend Server
+ * Real-time messaging application with Socket.IO and MongoDB
+ */
+
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
@@ -8,69 +13,63 @@ const Conversation = require("./models");
 
 const app = express();
 
-// MongoDB URI check
+// Validate required environment variables
 const dbURI = process.env.MONGODB_URI;
 if (!dbURI) {
   console.error('MONGODB_URI environment variable is required');
   process.exit(1);
 }
 
-// 1. CORS first
+// Configure CORS for frontend applications
 app.use(cors({
   origin: [
-    "https://swapex-verceldeployment.vercel.app",
-    "http://localhost:5174"
+    "https://swapex-verceldeployment.vercel.app", // Production frontend
+    "http://localhost:5174" // Development frontend
   ],
   credentials: true
 }));
 
+// Enable JSON request body parsing
 app.use(express.json());
 
-// 2. Routes before socket
+// Mount conversation API routes
 app.use("/conversation", conversationRoutes);
 
-// 3. Create HTTP server
+// Create HTTP server instance
 const server = http.createServer(app);
 
-// 4. Attach socket.io
+// Initialize Socket.IO server with CORS configuration
 const io = new Server(server, {
   cors: {
     origin: [
-      "https://swapex-verceldeployment.vercel.app",
-      "http://localhost:5174"
+      "https://swapex-verceldeployment.vercel.app", // Production frontend
+      "http://localhost:5174" // Development frontend
     ],
     methods: ["GET", "POST"],
     credentials: true
   }
 });
 
-// MongoDB connection
+// Connect to MongoDB with optimized connection settings
 mongoose.connect(dbURI, {
-    serverSelectionTimeoutMS: 10000, 
-    socketTimeoutMS: 45000, 
-    maxPoolSize: 10, 
-    heartbeatFrequencyMS: 10000,
+    serverSelectionTimeoutMS: 10000, // 10 second timeout for server selection
+    socketTimeoutMS: 45000, // 45 second timeout for socket operations
+    maxPoolSize: 10, // Maximum 10 connections in the pool
+    heartbeatFrequencyMS: 10000, // Send heartbeat every 10 seconds
 })
 .then(() => {
     console.log('MongoDB connected successfully');
-    console.log('Database URI (masked):', dbURI.replace(/\/\/[^@]+@/, '//***:***@'));
-    console.log('Connected to database:', mongoose.connection.name || 'default');
-    console.log('MongoDB connection state:', mongoose.connection.readyState);
 })
 .catch(err => {
     console.error('MongoDB connection failed:', err.message);
-    console.error('Error code:', err.code);
-    console.error('Error name:', err.name);
-    console.error('Database URI (masked):', dbURI.replace(/\/\/[^@]+@/, '//***:***@'));
-    console.error('Full error:', err);
     
-    // Exit process on connection failure for hosted environments
+    // Exit process on connection failure in production environments
     if (process.env.NODE_ENV === 'production') {
         process.exit(1);
     }
 });
 
-// Handle MongoDB connection events
+// Monitor MongoDB connection health
 mongoose.connection.on('error', (err) => {
     console.error('MongoDB connection error:', err);
 });
@@ -83,23 +82,20 @@ mongoose.connection.on('reconnected', () => {
     console.log('MongoDB reconnected');
 });
 
-// 5. Socket logic
+// Handle real-time WebSocket connections
 io.on("connection", (socket) => {
-  console.log("Client connected", socket.id);
-
-  // Join a conversation room
+  
+  // Handle user joining a specific conversation room
   socket.on('join_room', (conversationId) => {
     socket.join(conversationId);
-    console.log(`User ${socket.id} joined room ${conversationId}`);
   });
 
-  // Handle sending messages
+  // Handle new message submissions
   socket.on('send_message', async (data) => {
     try {
       const { conversationId, message } = data;
-      console.log("Received message for room:", conversationId, message);
 
-      // Save message to MongoDB
+      // Find the conversation and save the new message
       const conversation = await Conversation.findById(conversationId);
       if (conversation) {
         const newMessage = {
@@ -108,15 +104,13 @@ io.on("connection", (socket) => {
           timestamp: message.timestamp || new Date()
         };
         
+        // Save message to database
         conversation.messages.push(newMessage);
         await conversation.save();
-        console.log("Message saved to database");
         
-        // Broadcast the message to all users in the room
+        // Broadcast message to all users in the conversation room
         io.to(conversationId).emit('receive_message', newMessage);
-        console.log(`Message broadcasted to room ${conversationId}`);
       } else {
-        console.error(`Conversation ${conversationId} not found`);
         socket.emit('message_error', { error: 'Conversation not found' });
       }
     } catch (error) {
@@ -125,20 +119,19 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Keep your existing listeners (backward compatibility)
+  // Legacy message handler for backward compatibility
   socket.on("sendMessage", (data) => {
-    console.log("Received (legacy):", data);
-    // Broadcast to all clients including sender
+    // Broadcast to all connected clients
     io.emit("newMessage", data);
   });
 
-  //listen to disconnection
+  // Handle client disconnection
   socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.id);
+    // Client disconnected - no action needed as Socket.IO handles cleanup
   });
 });
 
-// 6. Listen on EB port
+// Start the server on the specified port
 const port = process.env.PORT || 8080;
 server.listen(port, () => {
   console.log(`Server running on port ${port}`);
