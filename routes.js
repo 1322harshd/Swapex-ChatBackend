@@ -38,18 +38,27 @@ router.post("/", async (req, res) => {
     const buyer = normalizeVal(rawBuyer);
     const seller = normalizeVal(rawSeller);
 
-    // Build query object excluding null values
-    const query = {};
-    if (product !== null) query.product = product;
-    if (buyer !== null) query.buyer = buyer;
-    if (seller !== null) query.seller = seller;
+    // Create bidirectional query to find existing conversation regardless of who initiated it
+    const bidirectionalQuery = {
+      product: product,
+      $or: [
+        { buyer: buyer, seller: seller },
+        { buyer: seller, seller: buyer }
+      ]
+    };
 
-    // Use atomic upsert to prevent race conditions and duplicate conversations
-    const convo = await Conversation.findOneAndUpdate(
-      query,
-      { $setOnInsert: { product, buyer, seller, messages: [] } },
-      { new: true, upsert: true }
-    ).lean();
+    // First, try to find an existing conversation
+    let convo = await Conversation.findOne(bidirectionalQuery).lean();
+    
+    if (!convo) {
+      // If no conversation exists, create a new one with consistent buyer/seller order
+      const createQuery = { product, buyer, seller };
+      convo = await Conversation.findOneAndUpdate(
+        createQuery,
+        { $setOnInsert: { product, buyer, seller, messages: [] } },
+        { new: true, upsert: true }
+      ).lean();
+    }
 
     return res.json(convo);
   } catch (err) {

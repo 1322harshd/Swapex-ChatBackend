@@ -40,7 +40,7 @@ if (!dbURI) {
 // Configure CORS for frontend applications
 app.use(cors({
   origin: [
-    "https://swapex-verceldeployment.vercel.app", // Production frontend
+    "https://swapex.art", // Production frontend
     "http://localhost:5174" // Development frontend
   ],
   credentials: true
@@ -59,7 +59,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: [
-      "https://swapex-verceldeployment.vercel.app", // Production frontend
+      "https://swapex.art", // Production frontend
       "http://localhost:5174" // Development frontend
     ],
     methods: ["GET", "POST"],
