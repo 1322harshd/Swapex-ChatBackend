@@ -16,11 +16,11 @@ function normalizeVal(v) {
   if (v === undefined || v === null) return null;
   if (typeof v === "object") return v._id ?? v.id ?? v;
   
-  // Convert string numbers to actual numbers
-  if (typeof v === "string" && /^[0-9]+$/.test(v)) return Number(v);
+  // Convert string numbers to actual numbers for consistent storage
+  if (typeof v === "string" && /^[0-9]+$/.test(v)) return parseInt(v, 10);
   
   // Validate and convert MongoDB ObjectIds
-  if (typeof v === "string" && mongoose.Types.ObjectId.isValid(v)) return mongoose.Types.ObjectId(v);
+  if (typeof v === "string" && mongoose.Types.ObjectId.isValid(v)) return new mongoose.Types.ObjectId(v);
   
   return v;
 }
