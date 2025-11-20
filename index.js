@@ -11,6 +11,23 @@ const mongoose = require("mongoose");
 const conversationRoutes = require("./routes");
 const Conversation = require("./models");
 
+/**
+ * Helper function to normalize input values for database queries
+ * Converts string numbers to integers and validates MongoDB ObjectIds
+ */
+function normalizeVal(v) {
+  if (v === undefined || v === null) return null;
+  if (typeof v === "object") return v._id ?? v.id ?? v;
+  
+  // Convert string numbers to actual numbers
+  if (typeof v === "string" && /^[0-9]+$/.test(v)) return Number(v);
+  
+  // Validate and convert MongoDB ObjectIds
+  if (typeof v === "string" && mongoose.Types.ObjectId.isValid(v)) return mongoose.Types.ObjectId(v);
+  
+  return v;
+}
+
 const app = express();
 
 // Validate required environment variables
@@ -94,22 +111,23 @@ io.on("connection", (socket) => {
   socket.on('send_message', async (data) => {
     try {
       const { conversationId, message } = data;
-
-      // Find the conversation and save the new message
-      const conversation = await Conversation.findById(conversationId);
+      
+      // Normalize sender to ensure consistent data type
+      const normalizedMessage = {
+        sender: normalizeVal(message.sender),
+        text: message.text,
+        createdAt: new Date()
+      };
+      
+      const conversation = await Conversation.findByIdAndUpdate(
+        conversationId,
+        { $push: { messages: normalizedMessage } },
+        { new: true }
+      );
+      
       if (conversation) {
-        const newMessage = {
-          sender: message.sender,
-          text: message.text,
-          timestamp: message.timestamp || new Date()
-        };
-        
-        // Save message to database
-        conversation.messages.push(newMessage);
-        await conversation.save();
-        
-        // Broadcast message to all users in the conversation room
-        io.to(conversationId).emit('receive_message', newMessage);
+        // Broadcast only the new message to room participants
+        io.to(conversationId).emit('receive_message', normalizedMessage);
       } else {
         socket.emit('message_error', { error: 'Conversation not found' });
       }
