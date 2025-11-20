@@ -41,6 +41,7 @@ if (!dbURI) {
 app.use(cors({
   origin: [
     "https://swapex.art", // Production frontend
+    "https://www.swapex.art", // Production frontend with www
     "http://localhost:5174" // Development frontend
   ],
   credentials: true
@@ -60,6 +61,7 @@ const io = new Server(server, {
   cors: {
     origin: [
       "https://swapex.art", // Production frontend
+      "https://www.swapex.art", // Production frontend with www
       "http://localhost:5174" // Development frontend
     ],
     methods: ["GET", "POST"],
